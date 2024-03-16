@@ -34,7 +34,7 @@ def get_sduploader_input() -> dict:
     if os.path.exists(sd_input_path):
         with open(sd_input_path) as file:
             data_raw = file.read()
-            
+
         if len(re.findall(r'\.json$', sd_input_path)) > 0:
             data_entry_info = json.loads(data_raw)
 
@@ -187,13 +187,21 @@ def map_to_camtrap_deployment(deployment_table:list=None,
 
     deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
 
+    # Default lat lon coords are for north end of Wild Mile, and 25m coord-uncertainty:
+    lat_lon = [41.907144, -87.652254]
+
+    if len(re.findall('prologis', input_data['location'].lower())) > 0:
+        lat_lon = [41.84799, -87.65020]
+    elif len(re.findall('bubbly', input_data['location'].lower())) > 0:
+        lat_lon = [41.842389, -87.664844]
+
     deployment_map = {
         "deploymentID" : deploy_id,
         "locationID" : '',  # TODO
         "locationName" : input_data['location'],
-        "latitude" : 41.907144,
-        "longitude" : -87.652254,
-        "coordinateUncertainty" : None, # integer
+        "latitude" : lat_lon[0],  # 41.907144,
+        "longitude" : lat_lon[1],  # -87.652254,
+        "coordinateUncertainty" : 25, # integer
         "deploymentStart" : media_table['timestamp'].min(),
         "deploymentEnd" : media_table['timestamp'].max(),
         "setupBy" : None,
@@ -211,7 +219,7 @@ def map_to_camtrap_deployment(deployment_table:list=None,
         "habitat" : None,
         "deploymentGroups" : None,
         "deploymentTags" : None,
-        "deploymentComments" : None
+        "deploymentComments" : input_data['notes']
         }
     
     # validate static deployment mapping against current camtrap DP schema
