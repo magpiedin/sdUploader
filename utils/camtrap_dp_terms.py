@@ -34,7 +34,19 @@ def get_sduploader_input() -> dict:
     if os.path.exists(sd_input_path):
         with open(sd_input_path) as file:
             data_raw = file.read()
-        data_entry_info = json.loads(data_raw)
+            
+        if len(re.findall(r'\.json$', sd_input_path)) > 0:
+            data_entry_info = json.loads(data_raw)
+
+        elif sd_input_path.find('info.txt') > -1:
+            data_entry_info_raw = data_raw.split('\n')
+            data_entry_info = {
+                'photographer' : 'Urban Rivers',
+                'camera' : data_entry_info_raw[1],
+                'date' : data_entry_info_raw[2],
+                'location' : data_entry_info_raw[0],
+                'notes' : data_entry_info_raw[3]
+            }
     
     return data_entry_info
 
