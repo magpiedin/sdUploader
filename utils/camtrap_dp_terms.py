@@ -299,20 +299,10 @@ def map_to_camtrap_media(media_table:list=None,
     if len(image_info_raw) > 0:
         image_info = image_info_raw[0]
 
-        for image in image_info:
+    for image in image_info:
 
-            image_create_date_iso = None
-            if 'EXIF:CreateDate' in image:
-
-                if len(re.findall(r'\-',image['EXIF:CreateDate'])) > 0:
-                    image['EXIF:CreateDate'] = re.sub(r'\-', ':', image['EXIF:CreateDate'])
-                image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
-                
-                image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
-            else:
-                image_create_date_raw = time.ctime(os.path.getmtime(image['SourceFile']))
-                image_create_date_raw_1 = time.strptime(image_create_date_raw)
-                image_create_date_iso = time.strftime('%Y-%m-%dT%H:%M:%S-0600', image_create_date_raw_1)
+        image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
+        image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
 
             print(f'input_data = {input_data}')
             deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
