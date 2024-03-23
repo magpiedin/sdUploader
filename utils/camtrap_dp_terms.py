@@ -4,7 +4,7 @@ from datetime import datetime
 from dotenv import dotenv_values
 from exiftool import ExifToolHelper
 from pandas import DataFrame
-import json, os, re, requests, uuid, zipfile
+import json, os, re, requests, time, uuid, zipfile
 
 config = dotenv_values()
 camtrap_base_url = f'{config["CAMTRAP_BASE_URL"]}/{config["CAMTRAP_VERSION"]}'
@@ -253,8 +253,16 @@ def map_to_camtrap_media(media_table:list=None,
 
     for image in image_info:
 
-        image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
-        image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
+        image_create_date_iso = None
+        if 'EXIF:CreateDate' in image:
+
+            image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
+            image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
+        else:
+            print(f'TIME thing for {image["SourceFile"]}')
+            image_create_date_raw = time.ctime(os.path.getmtime(image['SourceFile']))
+            image_create_date_raw_1 = time.strptime(image_create_date_raw)
+            image_create_date_iso = time.strftime('%Y-%m-%dT%H:%M:%S-0600', image_create_date_raw_1)
 
         deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
         media_id = re.sub(r'\..+$', '', image['File:FileName'])
