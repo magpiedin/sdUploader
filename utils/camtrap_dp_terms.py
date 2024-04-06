@@ -27,7 +27,13 @@ def get_sduploader_input() -> dict:
 
     # TODO - Determine how/where sdUploader should output that data
 
-    data_entry_info = {}
+    data_entry_info = {
+        'photographer' : None,
+        'camera' : None,
+        'date' : None,
+        'location' : None,
+        'notes' : None
+    }
 
     sd_input_path = config['INPUT_SDUPLOADER_DATA_ENTRY']
 
@@ -40,13 +46,12 @@ def get_sduploader_input() -> dict:
 
         elif sd_input_path.find('info.txt') > -1:
             data_entry_info_raw = data_raw.split('\n')
-            data_entry_info = {
-                'photographer' : 'Urban Rivers',
-                'camera' : data_entry_info_raw[1],
-                'date' : data_entry_info_raw[2],
-                'location' : data_entry_info_raw[0],
-                'notes' : data_entry_info_raw[3]
-            }
+            data_entry_info['photographer'] = 'Urban Rivers'
+            data_entry_info['camera'] = data_entry_info_raw[1]
+            data_entry_info['date'] = data_entry_info_raw[2]
+            data_entry_info['location'] = data_entry_info_raw[0]
+            data_entry_info['notes'] = data_entry_info_raw[3]
+        
     
     return data_entry_info
 
@@ -158,9 +163,13 @@ def get_image_data(media_file_path:str=None) -> list:
     image_info = {}
 
     with ExifToolHelper() as et:
-        image_info = et.get_tags(f'{media_file_path}', tags = None)
-        image_info_list.append(image_info)
-    
+        try:
+            image_info = et.get_tags(f'{media_file_path}', tags = None)
+            image_info_list.append(image_info)
+        except: 
+            print(f'Check {media_file_path} -- EXIF data not retrievable') 
+            pass
+
     return image_info_list
 
 
@@ -176,6 +185,12 @@ def get_deployments_table_schema() -> list:
 
     return deployment_table
 
+def get_jpg(file_path, search_string):
+    file_list = os.listdir(file_path)
+    jpg_index = [i for i, x in enumerate(file_list) if len(re.findall(rf'{search_string}', x.lower())) > 0]
+    print(jpg_index)
+    print(file_list[jpg_index[0]])
+    return f"{file_path}/{file_list[jpg_index[0]]}"
 
 def map_to_camtrap_deployment(deployment_table:list=None, 
                               input_data:list=None, 
@@ -183,7 +198,14 @@ def map_to_camtrap_deployment(deployment_table:list=None,
                               media_table:DataFrame=None) -> list:
     '''map input fields & files to camtrap-dp deployments table fields'''
 
-    first_image_info = get_image_data(media_file_path)[0][0]
+    first_image_info = None
+    if len(re.findall(r'\.(jpg|jpeg)$', media_file_path.lower())) > 0:
+        first_image_info = get_image_data(media_file_path)[0][0]
+    else:
+        print(f'file path for GET_JPG{media_file_path}')
+        # file_list = os.listdir(media_file_path)
+        first_image = get_jpg(media_file_path, search_string='\.(jpg|jpeg)$')
+        first_image_info = get_image_data(first_image)[0][0]
 
     deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
 
@@ -249,45 +271,50 @@ def map_to_camtrap_media(media_table:list=None,
                          media_file_path:str=None) -> list:
     '''map input fields & files to camtrap-dp media table fields'''
 
-    image_info = get_image_data(media_file_path)[0]
+    media_map = {}
+    image_info_raw = get_image_data(media_file_path)
+    
+    if len(image_info_raw) > 0:
+        image_info = image_info_raw[0]
 
-    for image in image_info:
+        for image in image_info:
 
-        image_create_date_iso = None
-        if 'EXIF:CreateDate' in image:
+            image_create_date_iso = None
+            if 'EXIF:CreateDate' in image:
 
-            image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
-            image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
-        else:
-            print(f'TIME thing for {image["SourceFile"]}')
-            image_create_date_raw = time.ctime(os.path.getmtime(image['SourceFile']))
-            image_create_date_raw_1 = time.strptime(image_create_date_raw)
-            image_create_date_iso = time.strftime('%Y-%m-%dT%H:%M:%S-0600', image_create_date_raw_1)
+                image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
+                image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
+            else:
+                # print(f'TIME thing for {image["SourceFile"]}')
+                image_create_date_raw = time.ctime(os.path.getmtime(image['SourceFile']))
+                image_create_date_raw_1 = time.strptime(image_create_date_raw)
+                image_create_date_iso = time.strftime('%Y-%m-%dT%H:%M:%S-0600', image_create_date_raw_1)
 
-        deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
-        media_id = re.sub(r'\..+$', '', image['File:FileName'])
+            print(f'input_data = {input_data}')
+            deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
+            media_id = re.sub(r'\..+$', '', image['File:FileName'])
 
-        media_map = {
-            "mediaID" : media_id,  # Required
-            "deploymentID" : deploy_id,  # Required
-            "captureMethod" : 'activityDetection', # TODO - add to / pull from input_data
-            "timestamp" : image_create_date_iso,  # Required (ISO 8601 ~ YYYY-MM-DDThh:mm:ss±hh:mm)
-            "filePath" : image['File:Directory'],  # Required (relative within pkg, or URL)
-            "filePublic" : True,  # Required (use 'false' if inaccessible/sensitive)
-            "fileName" : image['File:FileName'],
-            "fileMediatype" : image['File:MIMEType'],  # Required (^(image|video|audio)/.*$)
-            "exifData" : image,
-            "favorite" : None,
-            "mediaComments" : None
-        }
+            media_map = {
+                "mediaID" : media_id,  # Required
+                "deploymentID" : deploy_id,  # Required
+                "captureMethod" : 'activityDetection', # TODO - add to / pull from input_data
+                "timestamp" : image_create_date_iso,  # Required (ISO 8601 ~ YYYY-MM-DDThh:mm:ss±hh:mm)
+                "filePath" : image['File:Directory'],  # Required (relative within pkg, or URL)
+                "filePublic" : True,  # Required (use 'false' if inaccessible/sensitive)
+                "fileName" : image['File:FileName'],
+                "fileMediatype" : image['File:MIMEType'],  # Required (^(image|video|audio)/.*$)
+                "exifData" : image,
+                "favorite" : None,
+                "mediaComments" : None
+            }
 
-        print(f'{media_file_path} -->  mediaID: {media_map["mediaID"]} | timestamp: {media_map["timestamp"]}')
+            print(f'{media_file_path} -->  mediaID: {media_map["mediaID"]} | timestamp: {media_map["timestamp"]}')
 
-        # TODO - split out mapping to config file to make this easier to maintain
+            # TODO - split out mapping to config file to make this easier to maintain
 
-        for key in media_map.keys():
-            if key not in media_table[0]:
-                raise ValueError(f'map_to_camtrap_deployment needs updated mapping: fields must be one of {media_table[0].keys()}')
+            for key in media_map.keys():
+                if key not in media_table[0]:
+                    raise ValueError(f'map_to_camtrap_deployment needs updated mapping: fields must be one of {media_table[0].keys()}')
 
         return media_map
 
