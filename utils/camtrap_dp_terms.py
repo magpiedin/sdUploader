@@ -343,7 +343,9 @@ def map_to_camtrap_media(media_table:list=None,
                     "exifData" : image,
                     "favorite" : None,
                     "mediaComments" : None
-                }                
+                }   
+
+                # print(f'{media_file_path} -->  mediaID: {media_map["mediaID"]} | timestamp: {media_map["timestamp"]}')             
 
                 # TODO - split out mapping to config file to make this easier to maintain
 
