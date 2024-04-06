@@ -304,46 +304,46 @@ def map_to_camtrap_media(media_table:list=None,
         image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
         image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
 
-            print(f'input_data = {input_data}')
-            deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
-            media_id = re.sub(r'\..+$', '', image['File:FileName'])
+        print(f'input_data = {input_data}')
+        deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
+        media_id = re.sub(r'\..+$', '', image['File:FileName'])
 
-            # Skip file if it isn't a valid image file with full EXIF metadata
-            if len(re.findall('thumbs.db', media_file_path.lower())) > 0 or 'File:MIMEType' not in image.keys():
-                print(f'Skipping {media_file_path}  -- MIMEType missing, not image/video/audio, or file corrupted?')
-                pass
+        # Skip file if it isn't a valid image file with full EXIF metadata
+        if len(re.findall('thumbs.db', media_file_path.lower())) > 0 or 'File:MIMEType' not in image.keys():
+            print(f'Skipping {media_file_path}  -- MIMEType missing, not image/video/audio, or file corrupted?')
+            pass
 
+        else:
+            print(f'{media_file_path} -->  mediaID: {media_id} | timestamp: {image_create_date_iso}')
+            if get_google_file_url is True:
+                
+                image_path = google_file_list.loc[google_file_list['name'] == image['File:FileName'],'webContentLink'].item()
             else:
-                print(f'{media_file_path} -->  mediaID: {media_id} | timestamp: {image_create_date_iso}')
-                if get_google_file_url is True:
-                    
-                    image_path = google_file_list.loc[google_file_list['name'] == image['File:FileName'],'webContentLink'].item()
-                else:
-                    image_path = re.sub(f"{config['INPUT_WORK_DIR']}", "", image['File:Directory'])
+                image_path = re.sub(f"{config['INPUT_WORK_DIR']}", "", image['File:Directory'])
 
-                media_map = {
-                    "mediaID" : media_id,  # Required
-                    "deploymentID" : deploy_id,  # Required
-                    "captureMethod" : 'activityDetection', # TODO - add to / pull from input_data
-                    "timestamp" : image_create_date_iso,  # Required (ISO 8601 ~ YYYY-MM-DDThh:mm:ss±hh:mm)
-                    "filePath" : image_path,  # image['File:Directory'],  # Required (relative within pkg, or URL)
-                    "filePublic" : True,  # Required (use 'false' if inaccessible/sensitive)
-                    "fileName" : image['File:FileName'],
-                    "fileMediatype" : image['File:MIMEType'],  # Required (^(image|video|audio)/.*$)
-                    "exifData" : image,
-                    "favorite" : None,
-                    "mediaComments" : None
-                }   
+            media_map = {
+                "mediaID" : media_id,  # Required
+                "deploymentID" : deploy_id,  # Required
+                "captureMethod" : 'activityDetection', # TODO - add to / pull from input_data
+                "timestamp" : image_create_date_iso,  # Required (ISO 8601 ~ YYYY-MM-DDThh:mm:ss±hh:mm)
+                "filePath" : image_path,  # image['File:Directory'],  # Required (relative within pkg, or URL)
+                "filePublic" : True,  # Required (use 'false' if inaccessible/sensitive)
+                "fileName" : image['File:FileName'],
+                "fileMediatype" : image['File:MIMEType'],  # Required (^(image|video|audio)/.*$)
+                "exifData" : image,
+                "favorite" : None,
+                "mediaComments" : None
+            }   
 
-                # print(f'{media_file_path} -->  mediaID: {media_map["mediaID"]} | timestamp: {media_map["timestamp"]}')             
+            # print(f'{media_file_path} -->  mediaID: {media_map["mediaID"]} | timestamp: {media_map["timestamp"]}')             
 
-                # TODO - split out mapping to config file to make this easier to maintain
+            # TODO - split out mapping to config file to make this easier to maintain
 
-                for key in media_map.keys():
-                    if key not in media_table[0]:
-                        raise ValueError(f'map_to_camtrap_deployment needs updated mapping: fields must be one of {media_table[0].keys()}')
-  
-                return media_map
+            for key in media_map.keys():
+                if key not in media_table[0]:
+                    raise ValueError(f'map_to_camtrap_deployment needs updated mapping: fields must be one of {media_table[0].keys()}')
+
+            return media_map
 
 
 def get_observations_table_schema() -> list:
