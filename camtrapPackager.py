@@ -104,6 +104,7 @@ def generate_media_datasets(file_path:str=None, input_data:dict=None) -> list:
     
     media_data = None
     image_batch = os.listdir(file_path)
+    image_batch.sort()
 
     if image_batch is not None:
 
@@ -124,7 +125,8 @@ def generate_media_datasets(file_path:str=None, input_data:dict=None) -> list:
                         media_row = uc.map_to_camtrap_media(
                             media_table=media_row_blank, input_data=input_data,
                             media_file_path=f"{file_path}/{image}")
-                        media_raw_data.append(media_row)
+                        if media_row is not None:
+                            media_raw_data.append(media_row)
 
         media_data_filename = f"{camtrap_config_urls['output']}/media.csv"
 
@@ -177,7 +179,7 @@ def prep_camtrap_dp(file_path_raw:sd.SdXDevice=None):
     '''
 
     if config['MODE'] == "TEST":
-        file_path = config['INPUT_IMAGE_DIR']
+        file_path = f"{config['INPUT_WORK_DIR']}{config['INPUT_IMAGE_DIR']}"
         
     else: 
         # TODO - check if mountpoint sd.SdXDevice is interchangeable with str
@@ -195,14 +197,16 @@ def prep_camtrap_dp(file_path_raw:sd.SdXDevice=None):
         file_path = file_path, 
         input_data = data_entry_info
         )
-
-    deployments_data = generate_deployments_datasets(
+    
+    # Generate deployments.CSV
+    generate_deployments_datasets(
         file_path = file_path, 
         media_table = media_data,
         input_data = data_entry_info
         )
 
-    observations_data = generate_observations_datasets(
+    # Generate observations.CSV
+    generate_observations_datasets(
         media_table = media_data
         )
     
@@ -233,10 +237,6 @@ def prep_camtrap_dp(file_path_raw:sd.SdXDevice=None):
         resources_prepped = data_resources,
         media_table = media_data
         )
-    
-    # print(f'# # # # # # camtrap data START # # # #')
-    # print(output_camtrap.__dict__)
-    # print(f'# # # # # # camtrap data FINISH # # # #')
 
 
     # Output Camtrap-DP
