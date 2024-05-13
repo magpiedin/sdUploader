@@ -337,11 +337,21 @@ def map_to_camtrap_media(media_table:list=None,
 
             # print(f'{media_file_path} -->  mediaID: {media_map["mediaID"]} | timestamp: {media_map["timestamp"]}')             
 
-            # TODO - split out mapping to config file to make this easier to maintain
+            media_map = {
+                "mediaID" : media_id,  # Required
+                "deploymentID" : deploy_id,  # Required
+                "captureMethod" : 'activityDetection', # TODO - add to / pull from input_data
+                "timestamp" : image_create_date_iso,  # Required (ISO 8601 ~ YYYY-MM-DDThh:mm:ss±hh:mm)
+                "filePath" : image_path,  # image['File:Directory'],  # Required (relative within pkg, or URL)
+                "filePublic" : True,  # Required (use 'false' if inaccessible/sensitive)
+                "fileName" : image['File:FileName'],
+                "fileMediatype" : image['File:MIMEType'],  # Required (^(image|video|audio)/.*$)
+                "exifData" : image,
+                "favorite" : None,
+                "mediaComments" : None
+            }                
 
-            for key in media_map.keys():
-                if key not in media_table[0]:
-                    raise ValueError(f'map_to_camtrap_deployment needs updated mapping: fields must be one of {media_table[0].keys()}')
+            # TODO - split out mapping to config file to make this easier to maintain
 
             return media_map
 
