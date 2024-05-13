@@ -4,6 +4,9 @@ from datetime import datetime
 from dotenv import dotenv_values
 from exiftool import ExifToolHelper
 from pandas import DataFrame
+import pandas as pd
+import utils.csv_tools as csv_tools
+import utils.google_drive as ug
 import json, os, re, requests, time, uuid, zipfile
 
 config = dotenv_values()
@@ -108,10 +111,14 @@ def map_camtrap_dp_ur_profile(
         'keywords' : ['Urban Rivers', 'urban wildlife', 'camera traps'],
         'image' : str(),
         'homepage' : 'https://www.urbanriv.org',
-        'sources' : [],
+        'sources' : [
+            {
+                'title':'sdUploader',
+                'path':'https://github.com/nkwsy/sdUploader'
+                }
+            ],
         'bibliographicCitation': str(),
         'licenses': [
-            # TODO - confirm w/ UR
             {
                 "name": "CC0-1.0",
                 "scope": "data"
@@ -143,7 +150,16 @@ def map_camtrap_dp_ur_profile(
             'start' : "",
             'end' : ""
         },
-        'taxonomic' : []
+        'taxonomic' : [
+            {
+                "scientificName": "Branta canadensis",
+                "taxonID": "https://www.checklistbank.org/dataset/292011/taxon/5WRC3",
+                "taxonRank": "species",
+                "vernacularNames": {
+                    "eng": "Canada goose"
+                    }
+                }
+            ]
         }
     
     # validate static deployment mapping against current camtrap DP schema
@@ -268,11 +284,17 @@ def get_media_table_schema() -> list:
 
 def map_to_camtrap_media(media_table:list=None,
                          input_data:list=None, 
-                         media_file_path:str=None) -> list:
+                         media_file_path:str=None,
+                         get_google_file_url:bool=False) -> list:
     '''map input fields & files to camtrap-dp media table fields'''
 
     media_map = {}
     image_info_raw = get_image_data(media_file_path)
+
+    if get_google_file_url is True:
+        google_file_list = ug.get_google_file_list(N_folders = 5, N_files = 200)
+        google_file_list = DataFrame(google_file_list)
+        # print(f'GOOGLE file list: {google_file_list}')
     
     if len(image_info_raw) > 0:
         image_info = image_info_raw[0]
@@ -282,10 +304,12 @@ def map_to_camtrap_media(media_table:list=None,
             image_create_date_iso = None
             if 'EXIF:CreateDate' in image:
 
+                if len(re.findall(r'\-',image['EXIF:CreateDate'])) > 0:
+                    image['EXIF:CreateDate'] = re.sub(r'\-', ':', image['EXIF:CreateDate'])
                 image_create_date_raw = datetime.strptime(image['EXIF:CreateDate'], '%Y:%m:%d %H:%M:%S')
+                
                 image_create_date_iso = datetime.strftime(image_create_date_raw, '%Y-%m-%dT%H:%M:%S-0600')
             else:
-                # print(f'TIME thing for {image["SourceFile"]}')
                 image_create_date_raw = time.ctime(os.path.getmtime(image['SourceFile']))
                 image_create_date_raw_1 = time.strptime(image_create_date_raw)
                 image_create_date_iso = time.strftime('%Y-%m-%dT%H:%M:%S-0600', image_create_date_raw_1)
@@ -294,29 +318,40 @@ def map_to_camtrap_media(media_table:list=None,
             deploy_id = f"{input_data['location']}-{input_data['date']}-{input_data['camera']}"
             media_id = re.sub(r'\..+$', '', image['File:FileName'])
 
-            media_map = {
-                "mediaID" : media_id,  # Required
-                "deploymentID" : deploy_id,  # Required
-                "captureMethod" : 'activityDetection', # TODO - add to / pull from input_data
-                "timestamp" : image_create_date_iso,  # Required (ISO 8601 ~ YYYY-MM-DDThh:mm:ss±hh:mm)
-                "filePath" : image['File:Directory'],  # Required (relative within pkg, or URL)
-                "filePublic" : True,  # Required (use 'false' if inaccessible/sensitive)
-                "fileName" : image['File:FileName'],
-                "fileMediatype" : image['File:MIMEType'],  # Required (^(image|video|audio)/.*$)
-                "exifData" : image,
-                "favorite" : None,
-                "mediaComments" : None
-            }
+            # Skip file if it isn't a valid image file with full EXIF metadata
+            if len(re.findall('thumbs.db', media_file_path.lower())) > 0 or 'File:MIMEType' not in image.keys():
+                print(f'Skipping {media_file_path}  -- MIMEType missing, not image/video/audio, or file corrupted?')
+                pass
 
-            print(f'{media_file_path} -->  mediaID: {media_map["mediaID"]} | timestamp: {media_map["timestamp"]}')
+            else:
+                print(f'{media_file_path} -->  mediaID: {media_id} | timestamp: {image_create_date_iso}')
+                if get_google_file_url is True:
+                    
+                    image_path = google_file_list.loc[google_file_list['name'] == image['File:FileName'],'webContentLink'].item()
+                else:
+                    image_path = re.sub(f"{config['INPUT_WORK_DIR']}", "", image['File:Directory'])
 
-            # TODO - split out mapping to config file to make this easier to maintain
+                media_map = {
+                    "mediaID" : media_id,  # Required
+                    "deploymentID" : deploy_id,  # Required
+                    "captureMethod" : 'activityDetection', # TODO - add to / pull from input_data
+                    "timestamp" : image_create_date_iso,  # Required (ISO 8601 ~ YYYY-MM-DDThh:mm:ss±hh:mm)
+                    "filePath" : image_path,  # image['File:Directory'],  # Required (relative within pkg, or URL)
+                    "filePublic" : True,  # Required (use 'false' if inaccessible/sensitive)
+                    "fileName" : image['File:FileName'],
+                    "fileMediatype" : image['File:MIMEType'],  # Required (^(image|video|audio)/.*$)
+                    "exifData" : image,
+                    "favorite" : None,
+                    "mediaComments" : None
+                }                
 
-            for key in media_map.keys():
-                if key not in media_table[0]:
-                    raise ValueError(f'map_to_camtrap_deployment needs updated mapping: fields must be one of {media_table[0].keys()}')
+                # TODO - split out mapping to config file to make this easier to maintain
 
-        return media_map
+                for key in media_map.keys():
+                    if key not in media_table[0]:
+                        raise ValueError(f'map_to_camtrap_deployment needs updated mapping: fields must be one of {media_table[0].keys()}')
+  
+                return media_map
 
 
 def get_observations_table_schema() -> list:
@@ -423,6 +458,59 @@ def get_temporal_data(media_table):
 
     return temporal_data
 
+def get_taxonomic_data(get_obs_table:bool=False):
+
+    obs_xls_file = config['INPUT_OBSERVATION_XLSX']
+
+    if get_obs_table is True:  # and os.path.isfile(obs_xls_file):
+
+        try:
+            obs_table = pd.read_excel(obs_xls_file, sheet_name='observations')
+            tax_table = csv_tools.rows(file = config['INPUT_TAXON_LOOKUP'])
+            
+            taxonomic_data = []
+
+            for taxon in obs_table.scientificName.dropna().unique():
+
+                prepped_row = {
+                    "scientificName": taxon,
+                    "taxonID": None,
+                    "taxonRank": None,
+                    "vernacularNames": None
+                }
+
+                taxID = [match_row.get('taxonID') for match_row in tax_table if match_row['speciesName'] == taxon]
+                if len(taxID) > 0:
+                    prepped_row['taxonID'] = taxID[0]
+    
+                taxRank = [match_row.get('taxonRank') for match_row in tax_table if match_row['speciesName'] == taxon]
+                if len(taxRank) > 0:
+                    prepped_row['taxonRank'] = taxRank[0]
+
+                vernacular = [match_row.get('Common Name') for match_row in tax_table if match_row['speciesName'] == taxon]
+                if len(vernacular) > 0:
+                    prepped_row['vernacularNames'] = {'eng': vernacular[0]}
+
+                if prepped_row not in taxonomic_data:
+                    taxonomic_data.append(prepped_row)
+        
+        except FileNotFoundError:
+            print(f'File not found: {obs_xls_file} -- Check the value for "INPUT_OBSERVATION_XLSX" in the .env file. It should point to an appropriate excel file')
+ 
+        
+    else:
+        
+        taxonomic_data = [{
+            "scientificName": "Branta canadensis",
+            "taxonID": "https://www.checklistbank.org/dataset/292011/taxon/5WRC3",
+            "taxonRank": "species",
+            "vernacularNames": {
+                "eng": "Canada goose"
+                }
+            }]
+
+    return taxonomic_data
+
 
 class CamtrapPackage():
     '''
@@ -435,7 +523,8 @@ class CamtrapPackage():
             self, 
             profile_dict:dict=None,
             resources_prepped:list=None,
-            media_table:list=None
+            media_table:list=None,
+            get_obs_table:bool=False,
             ) -> None:
         
         if profile_dict is None:
@@ -461,7 +550,7 @@ class CamtrapPackage():
 
         self.spatial = profile_dict['spatial']
         self.temporal = get_temporal_data(media_table)
-        self.taxonomic = profile_dict['taxonomic']
+        self.taxonomic = get_taxonomic_data(get_obs_table)  # profile_dict['taxonomic']
 
         self.resources = resources_prepped
 
