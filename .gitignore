@@ -6,8 +6,6 @@ temp/*
 test*/*
 build/*
 
+.DS*
 token.pickle
-credentials.json
-.DS_Store
-sdUploader.log
-test_camtrap_output
+*.log
