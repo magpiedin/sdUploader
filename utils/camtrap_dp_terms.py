@@ -452,6 +452,7 @@ def map_media_to_gsheets_observations(media_row: dict) -> dict:
 
     return gsheets_obs_map
 
+
 # def get_observation_input(media_table:dict=None) -> dict:
 
 #     observation_table = []
